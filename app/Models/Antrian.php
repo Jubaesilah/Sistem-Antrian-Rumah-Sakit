@@ -15,10 +15,12 @@ class Antrian extends Model
         'nama_pasien',
         'jenis_layanan',
         'waktu_panggil',
+        'waktu_selesai',
     ];
 
     protected $casts = [
         'waktu_panggil' => 'datetime',
+        'waktu_selesai' => 'datetime',
     ];
 
     /**

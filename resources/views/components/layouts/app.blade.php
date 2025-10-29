@@ -8,9 +8,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body>
+<body class="antialiased">
     {{ $slot }}
     
     @livewireScripts
+    @stack('scripts')
 </body>
 </html>
