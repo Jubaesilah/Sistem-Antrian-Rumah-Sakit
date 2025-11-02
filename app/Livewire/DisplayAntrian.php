@@ -3,19 +3,15 @@
 namespace App\Livewire;
 
 use Livewire\Component;
-use App\Services\AntrianApiService;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class DisplayAntrian extends Component
 {
-    public $currentQueue;
-    public $loket1;
-    public $loket2;
-    public $loket3;
-    public $loket4;
-    public $loket5;
-    public $loket6;
-    public $loket7;
-    public $loket8;
+    public $calledQueues = [];
+    public $waitingQueues = [];
+    public $totalWaiting = 0;
     public $currentTime;
     public $currentDate;
     public $apiError = false;
@@ -23,22 +19,18 @@ class DisplayAntrian extends Component
     public $isLoading = false;
     public $lastUpdate;
     public $pollingInterval = 3; // dalam detik
-    public $useDummyData = true; // Set false jika API sudah ready
-
-    protected $apiService;
-
-    public function boot(AntrianApiService $apiService)
-    {
-        $this->apiService = $apiService;
-    }
+    public $previousCalledQueue = null; // Track previous called queue for speech
+    
+    // Bearer token for API authentication
+    protected $bearerToken = '11|lcGFis1StBkbRKXpISZe75jscWmMhpiSXzPxEbMD34e75610';
+    
+    // API base URL
+    protected $baseUrl = 'http://localhost:8000';
 
     public function mount()
     {
         // Set polling interval dari config atau default 3 detik
         $this->pollingInterval = config('api.polling_interval', 3);
-        
-        // Check apakah menggunakan dummy data dari config
-        $this->useDummyData = config('api.use_dummy_data', true);
         
         $this->loadQueueData();
     }
@@ -47,108 +39,112 @@ class DisplayAntrian extends Component
     {
         $this->isLoading = true;
         
-        // MODE DUMMY DATA - Untuk development/preview tanpa backend
-        if ($this->useDummyData) {
-            $this->loadDummyData();
-            $this->apiError = false;
-        } 
-        // MODE API - Uncomment saat backend sudah ready
-        else {
-            // Ambil data dari API menggunakan service
-            $result = $this->apiService->getDisplayData();
-
-            if ($result['success']) {
-                $queueData = $result['data'];
+        try {
+            // Get data from cache if available (to reduce API calls)
+            $cachedData = Cache::get('antrian_display_data');
+            
+            if ($cachedData) {
+                $this->processApiResponse($cachedData, true);
                 
-                // Parse data dari API
-                // Format expected: 
-                // {
-                //   "loket1": "A 145",
-                //   "loket2": "A 146",
-                //   "loket3": "A 144",
-                //   "loket4": "B 143",
-                //   "loket5": "B 098",
-                //   "loket6": "C 120",
-                //   "loket7": "C 121",
-                //   "loket8": "C 122",
-                //   "current_queue": {...}
-                // }
+                // Update timestamps even when using cached data
+                $this->currentTime = now()->format('H:i:s');
+                $this->currentDate = now()->locale('id')->isoFormat('DD MMMM YYYY');
+                $this->lastUpdate = now()->format('H:i:s');
+                $this->isLoading = false;
+                return;
+            }
+            
+            // Make direct API request with Bearer token
+            $endpoint = $this->baseUrl . '/api/queues/display';
+            
+            $response = Http::timeout(30) // 30 seconds timeout
+                ->withToken($this->bearerToken)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ])
+                ->get($endpoint);
+            
+            if ($response->successful()) {
+                $data = $response->json();
                 
-                $this->loket1 = $queueData['loket1'] ?? 'A 145';
-                $this->loket2 = $queueData['loket2'] ?? 'A 146';
-                $this->loket3 = $queueData['loket3'] ?? 'A 144';
-                $this->loket4 = $queueData['loket4'] ?? 'B 143';
-                $this->loket5 = $queueData['loket5'] ?? 'B 098';
-                $this->loket6 = $queueData['loket6'] ?? 'C 120';
-                $this->loket7 = $queueData['loket7'] ?? 'C 121';
-                $this->loket8 = $queueData['loket8'] ?? 'C 122';
+                // Cache the response for 2 seconds
+                Cache::put('antrian_display_data', $data, now()->addSeconds(2));
                 
-                $this->currentQueue = $queueData['current_queue'] ?? null;
-                
-                $this->apiError = false;
-                $this->fromCache = $result['from_cache'] ?? false;
+                // Process the response
+                $this->processApiResponse($data);
             } else {
-                // Jika API error, gunakan data fallback
+                // Handle error response
                 $this->useFallbackData();
                 $this->apiError = true;
             }
+        } catch (\Exception $e) {
+            // Handle exceptions
+            $this->useFallbackData();
+            $this->apiError = true;
         }
-
+        
         $this->currentTime = now()->format('H:i:s');
         $this->currentDate = now()->locale('id')->isoFormat('DD MMMM YYYY');
         $this->lastUpdate = now()->format('H:i:s');
         $this->isLoading = false;
     }
-
+    
     /**
-     * Load dummy data untuk preview/development
-     * Data akan berubah setiap refresh untuk simulasi real-time
+     * Process the API response data
      */
-    private function loadDummyData()
+    private function processApiResponse($data, $fromCache = false)
     {
-        // Simulasi data yang berubah-ubah
-        $prefixes = ['A', 'B', 'C'];
-        $currentMinute = now()->minute;
+        // Check if data is nested in 'data' key
+        $queueData = $data['data'] ?? $data;
         
-        // Generate nomor antrian yang berubah setiap menit
-        $baseNumber = 100 + $currentMinute;
+        // Extract queue data
+        $newCalledQueues = $queueData['called_queues'] ?? [];
+        $this->waitingQueues = $queueData['waiting_queues'] ?? [];
+        $this->totalWaiting = $queueData['total_waiting'] ?? 0;
         
-        $this->loket1 = $prefixes[0] . ' ' . ($baseNumber + rand(0, 5));
-        $this->loket2 = $prefixes[0] . ' ' . ($baseNumber + rand(6, 10));
-        $this->loket3 = $prefixes[0] . ' ' . ($baseNumber - rand(1, 5));
-        $this->loket4 = $prefixes[1] . ' ' . ($baseNumber + rand(0, 10));
-        $this->loket5 = $prefixes[1] . ' ' . ($baseNumber - rand(10, 20));
-        $this->loket6 = $prefixes[2] . ' ' . ($baseNumber + rand(15, 25));
-        $this->loket7 = $prefixes[2] . ' ' . ($baseNumber + rand(26, 35));
-        $this->loket8 = $prefixes[2] . ' ' . ($baseNumber + rand(36, 45));
+        // Check if there's a new called queue (for speech synthesis)
+        if (!empty($newCalledQueues)) {
+            $currentCalledQueue = $newCalledQueues[0]['queue_number'] ?? null;
+            
+            // If there's a new queue number different from previous, trigger speech
+            if ($currentCalledQueue && $currentCalledQueue !== $this->previousCalledQueue) {
+                $counterName = $newCalledQueues[0]['counter']['counter_name'] ?? 'Loket';
+                
+                // Dispatch browser event for speech synthesis
+                $this->dispatch('speakQueue', [
+                    'queueNumber' => $currentCalledQueue,
+                    'counterName' => $counterName
+                ]);
+                
+                // Update previous queue
+                $this->previousCalledQueue = $currentCalledQueue;
+            }
+        }
         
-        // Dummy current queue
-        $this->currentQueue = [
-            'nomor_antrian' => $this->loket1,
-            'loket_id' => 1,
-            'nama_pasien' => 'John Doe',
-            'jenis_layanan' => 'Pendaftaran',
-        ];
+        $this->calledQueues = $newCalledQueues;
+        $this->apiError = false;
+        $this->fromCache = $fromCache;
     }
+
 
     /**
      * Gunakan data fallback jika API tidak tersedia
      */
     private function useFallbackData()
     {
-        $this->loket1 = $this->loket1 ?? 'A 145';
-        $this->loket2 = $this->loket2 ?? 'A 146';
-        $this->loket3 = $this->loket3 ?? 'A 144';
-        $this->loket4 = $this->loket4 ?? 'B 143';
-        $this->loket5 = $this->loket5 ?? 'B 098';
-        $this->loket6 = $this->loket6 ?? 'C 120';
-        $this->loket7 = $this->loket7 ?? 'C 121';
-        $this->loket8 = $this->loket8 ?? 'C 122';
+        // Set empty arrays for fallback data
+        $this->calledQueues = [];
+        $this->waitingQueues = [];
+        $this->totalWaiting = 0;
     }
 
     public function render()
     {
-        return view('livewire.display-antrian');
+        // Set the title in the view data
+        return view('livewire.display-antrian', [
+            'title' => 'Display Antrian'
+        ]);
     }
 
     /**

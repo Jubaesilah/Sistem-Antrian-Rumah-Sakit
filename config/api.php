@@ -12,20 +12,8 @@ return [
     |
     */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Use Dummy Data
-    |--------------------------------------------------------------------------
-    |
-    | Set true untuk menggunakan dummy data (tanpa API backend).
-    | Set false untuk menggunakan API backend yang sebenarnya.
-    | Berguna untuk development/preview sebelum backend ready.
-    |
-    */
 
-    'use_dummy_data' => env('API_USE_DUMMY_DATA', true),
-
-    'base_url' => env('API_BASE_URL', 'http://localhost:8080'),
+    'base_url' => env('API_BASE_URL', 'http://localhost:8000'),
 
     /*
     |--------------------------------------------------------------------------
@@ -36,7 +24,7 @@ return [
     |
     */
 
-    'timeout' => env('API_TIMEOUT', 5),
+    'timeout' => env('API_TIMEOUT', 30), // Increased to 30 seconds
 
     /*
     |--------------------------------------------------------------------------
@@ -60,7 +48,7 @@ return [
     */
 
     'endpoints' => [
-        'display' => '/api/antrian/display',
+        'display' => '/api/queues/display',
         'loket' => '/api/antrian/loket',
         'current' => '/api/antrian/current',
     ],
@@ -76,7 +64,7 @@ return [
 
     'auth' => [
         'type' => env('API_AUTH_TYPE', 'bearer'), // bearer, basic, api_key
-        'token' => env('API_AUTH_TOKEN', null),
+        'token' => env('API_AUTH_TOKEN', '11|lcGFis1StBkbRKXpISZe75jscWmMhpiSXzPxEbMD34e75610'),
         'api_key' => env('API_KEY', null),
     ],
 

@@ -38,7 +38,7 @@
                 <span class="text-xs opacity-75">Last: {{ $lastUpdate }}</span>
             @endif
             
-            @if(isset($apiError) && $apiError && (!isset($useDummyData) || !$useDummyData))
+            @if(isset($apiError) && $apiError)
                 <span class="text-xs bg-red-500 px-2 py-1 rounded">API Offline</span>
             @endif
         </div>
