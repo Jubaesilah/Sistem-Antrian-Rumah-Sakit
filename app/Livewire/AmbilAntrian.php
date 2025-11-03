@@ -3,8 +3,8 @@
 namespace App\Livewire;
 
 use Livewire\Component;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache;
+use App\Helpers\AuthHelper;
+use Illuminate\Support\Facades\Log;
 
 class AmbilAntrian extends Component
 {
@@ -15,84 +15,120 @@ class AmbilAntrian extends Component
     public $isLoading = false;
     public $printLoading = false;
     public $apiError = false;
-    
-    // Bearer token for API authentication
-    protected $bearerToken = '11|lcGFis1StBkbRKXpISZe75jscWmMhpiSXzPxEbMD34e75610';
-    
-    // API base URL
-    protected $baseUrl = 'http://localhost:8000';
-    
+
     public function mount()
     {
         $this->loadCounters();
     }
-    
+
     public function loadCounters()
     {
         try {
-            // Get data from cache if available
-            $cachedData = Cache::get('counters_list');
-            
-            if ($cachedData) {
-                $this->processCountersData($cachedData);
-                return;
-            }
-            
-            // Make direct API request with Bearer token
-            $endpoint = $this->baseUrl . '/api/counters/list';
-            
-            $response = Http::timeout(30)
-                ->withToken($this->bearerToken)
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->get($endpoint);
-            
+            // Make API request using AuthHelper (public endpoint)
+            $response = AuthHelper::apiRequest('GET', '/api/counters/list', [], false);
+
             if ($response->successful()) {
                 $data = $response->json();
-                
-                // Cache the response for 5 minutes
-                Cache::put('counters_list', $data, now()->addMinutes(5));
-                
-                // Process the response
-                $this->processCountersData($data);
+
+                // Log untuk debugging
+                Log::info('AmbilAntrian: API response received', [
+                    'status' => $response->status(),
+                    'has_success' => isset($data['success']),
+                    'has_data' => isset($data['data']),
+                    'data_count' => isset($data['data']) ? count($data['data']) : 0
+                ]);
+
+                // Validate response structure - format: {status_code, success, message, data}
+                if (isset($data['success']) && $data['success'] === true && isset($data['data']) && is_array($data['data'])) {
+                    // Process the response
+                    $this->processCountersData($data);
+
+                    // Only set error if no counters found
+                    if (empty($this->lokets)) {
+                        Log::warning('AmbilAntrian: API response successful but no counters found', ['response' => $data]);
+                        $this->apiError = false; // Don't show error if valid response but empty
+                    } else {
+                        $this->apiError = false;
+                    }
+                } else {
+                    // Response format tidak sesuai
+                    Log::error('AmbilAntrian: Invalid API response format', [
+                        'status' => $response->status(),
+                        'response' => $data,
+                        'expected_format' => '{success: true, data: [...]}'
+                    ]);
+                    $this->useFallbackData();
+                    $this->apiError = true;
+                }
             } else {
                 // Handle error response
+                $status = $response->status();
+                $body = $response->body();
+                Log::error('AmbilAntrian: API request failed', [
+                    'status' => $status,
+                    'endpoint' => '/api/counters/list',
+                    'response' => $body
+                ]);
                 $this->useFallbackData();
                 $this->apiError = true;
             }
         } catch (\Exception $e) {
             // Handle exceptions
+            Log::error('AmbilAntrian: Exception in loadCounters', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
             $this->useFallbackData();
             $this->apiError = true;
         }
     }
-    
+
     private function processCountersData($data)
     {
-        // Extract counters from API response
-        $counters = $data['data'] ?? [];
-        
-        // Map API data to lokets format with icons and colors
-        $this->lokets = collect($counters)->map(function($counter, $index) {
-            // Assign icons and colors based on counter name or index
-            $icons = ['child', 'tooth', 'medical', 'eye', 'heart', 'baby'];
-            $colors = ['blue', 'cyan', 'green', 'purple', 'red', 'pink'];
-            
-            return [
-                'id' => $counter['counter_id'],
-                'kode' => chr(65 + $index), // A, B, C, etc.
-                'nama' => $counter['counter_name'],
-                'deskripsi' => $counter['description'] ?? 'Layanan kesehatan',
-                'icon' => $icons[$index % count($icons)],
-                'warna' => $colors[$index % count($colors)]
-            ];
-        })->toArray();
-        
-        $this->apiError = false;
+        try {
+            // Extract counters from API response
+            $counters = $data['data'] ?? [];
+
+            // Validate counters is an array
+            if (!is_array($counters)) {
+                Log::warning('AmbilAntrian: Counters data is not an array', ['data' => $counters]);
+                $counters = [];
+            }
+
+            // Map API data to lokets format with icons and colors
+            $this->lokets = collect($counters)->filter(function ($counter) {
+                // Validate required fields
+                return isset($counter['counter_id']) && isset($counter['counter_name']);
+            })->map(function ($counter, $index) {
+                // Assign icons and colors based on counter name or index
+                $icons = ['child', 'tooth', 'medical', 'eye', 'heart', 'baby'];
+                $colors = ['blue', 'cyan', 'green', 'purple', 'red', 'pink'];
+
+                return [
+                    'id' => $counter['counter_id'],
+                    'kode' => chr(65 + $index), // A, B, C, etc.
+                    'nama' => $counter['counter_name'],
+                    'deskripsi' => $counter['description'] ?? 'Layanan kesehatan',
+                    'icon' => $icons[$index % count($icons)],
+                    'warna' => $colors[$index % count($colors)]
+                ];
+            })->values()->toArray(); // values() untuk re-index array setelah filter
+
+            // Reset error state if data processed successfully
+            $this->apiError = false;
+        } catch (\Exception $e) {
+            Log::error('AmbilAntrian: Error processing counters data', [
+                'message' => $e->getMessage(),
+                'data' => $data
+            ]);
+            // Set empty array instead of fallback to allow retry
+            $this->lokets = [];
+            $this->apiError = true;
+        }
     }
-    
+
     private function useFallbackData()
     {
         // Fallback data if API is not available
@@ -107,34 +143,27 @@ class AmbilAntrian extends Component
             ]
         ];
     }
-    
+
     public function ambilNomor($loketId)
     {
         $this->isLoading = true;
-        
+
         try {
             // Cari loket yang dipilih
             $loket = collect($this->lokets)->firstWhere('id', $loketId);
             $this->selectedLoket = $loket;
-            
-            // Make API request to create queue
-            $endpoint = $this->baseUrl . '/api/queues';
-            
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($endpoint, [
-                    'counter_id' => $loketId
-                ]);
-            
+
+            // Make API request to create queue using AuthHelper (public endpoint)
+            $response = AuthHelper::apiRequest('POST', '/api/queues', [
+                'counter_id' => $loketId
+            ], false);
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 // Extract queue data from response
                 $queueData = $data['data'] ?? [];
-                
+
                 // Format nomor antrian
                 $this->nomorAntrian = [
                     'queue_id' => $queueData['queue_id'] ?? null,
@@ -148,10 +177,10 @@ class AmbilAntrian extends Component
                     'loket' => $queueData['counter']['counter_name'] ?? $loket['nama'],
                     'status' => $queueData['status'] ?? 'waiting',
                 ];
-                
+
                 // Show ticket modal by setting property to true
                 $this->showTicket = true;
-                
+
                 // Show success message
                 session()->flash('success', 'Nomor antrian berhasil dibuat: ' . $queueData['queue_number']);
             } else {
@@ -165,14 +194,14 @@ class AmbilAntrian extends Component
             $this->isLoading = false;
         }
     }
-    
+
     public function closeTicket()
     {
         $this->showTicket = false;
         $this->selectedLoket = null;
         $this->nomorAntrian = null;
     }
-    
+
     public function render()
     {
         return view('livewire.ambil-antrian');

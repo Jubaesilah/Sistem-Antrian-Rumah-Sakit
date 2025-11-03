@@ -8,26 +8,21 @@ use Illuminate\Http\Request;
 class GoogleController extends Controller
 {
     /**
-     * Redirect ke Google OAuth
+     * Redirect ke Google OAuth di backend
      */
     public function redirect()
     {
-        // Implementasi nanti menggunakan Laravel Socialite
-        // return Socialite::driver('google')->redirect();
-        
-        // Untuk saat ini, kita hanya buat dummy redirect
-        return redirect()->route('login');
+        // Redirect ke backend API untuk Google OAuth
+        $backendUrl = env('BACKEND_API_URL', 'http://localhost:8000');
+        return redirect($backendUrl . '/api/auth/google');
     }
     
     /**
-     * Handle callback dari Google
+     * Handle callback dari Google (tidak digunakan, callback langsung dari backend)
      */
     public function callback()
     {
-        // Implementasi nanti menggunakan Laravel Socialite
-        // $googleUser = Socialite::driver('google')->user();
-        
-        // Untuk saat ini, kita hanya buat dummy redirect
-        return redirect()->route('display.antrian');
+        // Callback akan ditangani oleh backend dan redirect ke /auth/callback
+        return redirect()->route('auth.callback');
     }
 }
