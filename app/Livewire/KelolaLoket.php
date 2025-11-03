@@ -4,40 +4,52 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Livewire\WithPagination;
+use App\Helpers\AuthHelper;
+use Illuminate\Support\Facades\Log;
 
 class KelolaLoket extends Component
 {
     use WithPagination;
 
     public $search = '';
-    public $sortBy = 'nama';
-    public $sortDirection = 'asc';
+    public $sortBy = 'created_at';
+    public $sortDirection = 'desc';
     public $perPage = 10;
+    
+    // API data
+    public $counters = [];
+    public $pagination = [];
+    public $apiError = null;
 
-    // Modal states
-    public $showModal = false;
-    public $modalMode = 'create'; // 'create' or 'edit'
-    public $selectedLoketId = null;
-
-    // Form fields
-    public $nama = '';
-    public $kode = '';
-    public $deskripsi = '';
-    public $status = 'aktif';
 
     protected $paginationTheme = 'tailwind';
 
+    public function mount()
+    {
+        $this->loadCounters();
+    }
+
     public function updatingSearch()
     {
-        $this->resetPage();
+        $this->loadCounters();
     }
 
     public function updatingPerPage()
     {
-        $this->resetPage();
+        $this->loadCounters();
+    }
+    
+    public function updatingSortBy()
+    {
+        $this->loadCounters();
+    }
+    
+    public function updatingSortDirection()
+    {
+        $this->loadCounters();
     }
 
-    public function sortBy($field)
+    public function sortByField($field)
     {
         if ($this->sortBy === $field) {
             $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
@@ -45,177 +57,96 @@ class KelolaLoket extends Component
             $this->sortBy = $field;
             $this->sortDirection = 'asc';
         }
-        $this->resetPage();
+        $this->loadCounters();
     }
-
-    public function openCreateModal()
+    
+    public function loadCounters()
     {
-        $this->resetForm();
-        $this->modalMode = 'create';
-        $this->showModal = true;
-    }
+        try {
+            $page = request()->get('page', 1);
+            
+            $response = AuthHelper::apiRequest('GET', '/api/counters', [
+                'per_page' => $this->perPage,
+                'page' => $page,
+                'search' => $this->search,
+                'sort_by' => $this->sortBy,
+                'sort_order' => $this->sortDirection
+            ]);
 
-    public function openEditModal($loketId)
-    {
-        $this->selectedLoketId = $loketId;
-        $this->modalMode = 'edit';
-        
-        // Load data (dummy data for now)
-        $loket = $this->getDummyLokets()->where('id', $loketId)->first();
-        if ($loket) {
-            $this->nama = $loket['nama'];
-            $this->kode = $loket['kode'];
-            $this->deskripsi = $loket['deskripsi'];
-            $this->status = $loket['status'];
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['success'] && isset($data['data'])) {
+                    $this->counters = $data['data']['counters'];
+                    $this->pagination = $data['data']['pagination'];
+                    $this->apiError = null;
+                } else {
+                    $this->apiError = $data['message'] ?? 'Gagal mengambil data';
+                }
+            } else {
+                $this->apiError = 'Gagal terhubung ke server: ' . $response->status();
+                Log::error('API Error: ' . $response->body());
+            }
+        } catch (\Exception $e) {
+            $this->apiError = 'Terjadi kesalahan: ' . $e->getMessage();
+            Log::error('Exception in loadCounters: ' . $e->getMessage());
         }
-        
-        $this->showModal = true;
     }
 
-    public function closeModal()
-    {
-        $this->showModal = false;
-        $this->resetForm();
-    }
 
-    public function save()
+    public function delete($counterId)
     {
-        $this->validate([
-            'nama' => 'required|min:3',
-            'kode' => 'required|min:1',
-            'deskripsi' => 'required|min:10',
-            'status' => 'required|in:aktif,nonaktif'
-        ]);
-
-        // Simulate save (replace with actual database operations)
-        if ($this->modalMode === 'create') {
-            session()->flash('message', 'Loket berhasil ditambahkan!');
-        } else {
-            session()->flash('message', 'Loket berhasil diperbarui!');
+        try {
+            Log::info('Attempting to delete counter: ' . $counterId);
+            
+            $response = AuthHelper::apiRequest('DELETE', '/api/counters/' . $counterId);
+            
+            Log::info('Delete response status: ' . $response->status());
+            Log::info('Delete response body: ' . $response->body());
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if (isset($data['success']) && $data['success']) {
+                    // Reload data from API
+                    $this->loadCounters();
+                    
+                    // Flash success message
+                    session()->flash('message', 'Counter berhasil dihapus!');
+                    
+                    // Dispatch browser event to show notification
+                    $this->dispatch('counter-deleted');
+                    
+                    Log::info('Counter deleted successfully: ' . $counterId);
+                } else {
+                    $errorMsg = $data['message'] ?? 'Gagal menghapus counter';
+                    session()->flash('error', $errorMsg);
+                    $this->dispatch('counter-delete-failed', message: $errorMsg);
+                    Log::error('Delete failed: ' . $errorMsg);
+                }
+            } else {
+                $errorData = $response->json();
+                $errorMessage = $errorData['message'] ?? 'Gagal terhubung ke server: ' . $response->status();
+                session()->flash('error', $errorMessage);
+                $this->dispatch('counter-delete-failed', message: $errorMessage);
+                Log::error('Delete API Error - Status: ' . $response->status() . ', Body: ' . $response->body());
+            }
+        } catch (\Exception $e) {
+            $errorMessage = 'Terjadi kesalahan: ' . $e->getMessage();
+            session()->flash('error', $errorMessage);
+            $this->dispatch('counter-delete-failed', message: $errorMessage);
+            Log::error('Exception in delete: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
         }
-
-        $this->closeModal();
     }
 
-    public function delete($loketId)
+    public function gotoPage($page)
     {
-        // Simulate delete (replace with actual database operations)
-        session()->flash('message', 'Loket berhasil dihapus!');
-    }
-
-    private function resetForm()
-    {
-        $this->nama = '';
-        $this->kode = '';
-        $this->deskripsi = '';
-        $this->status = 'aktif';
-        $this->selectedLoketId = null;
-    }
-
-    private function getDummyLokets()
-    {
-        return collect([
-            [
-                'id' => 1,
-                
-                'nama' => 'Poli Anak',
-                'deskripsi' => 'Layanan kesehatan untuk anak-anak dan balita dengan dokter spesialis anak berpengalaman',
-                
-                'antrian_hari_ini' => 26,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 2,
-               
-                'nama' => 'Poli Gigi',
-                'deskripsi' => 'Layanan kesehatan gigi dan mulut dengan peralatan modern dan dokter gigi berpengalaman',
-                
-                'antrian_hari_ini' => 21,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 3,
-                
-                'nama' => 'Poli Umum',
-                'deskripsi' => 'Layanan kesehatan umum untuk berbagai keluhan dan pemeriksaan rutin',
-                
-                'antrian_hari_ini' => 30,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 4,
-                
-                'nama' => 'Poli Mata',
-                'deskripsi' => 'Layanan kesehatan mata dengan dokter spesialis mata dan peralatan canggih',
-                
-                'antrian_hari_ini' => 16,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 5,
-               
-                'nama' => 'Poli Jantung',
-                'deskripsi' => 'Layanan kesehatan jantung dan pembuluh darah dengan teknologi terdepan',
-                
-                'antrian_hari_ini' => 8,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 6,
-                
-                'nama' => 'Poli Kandungan',
-                'deskripsi' => 'Layanan kesehatan kandungan dan kebidanan untuk ibu hamil',
-                
-                'antrian_hari_ini' => 0,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 7,
-                
-                'nama' => 'Poli THT',
-                'deskripsi' => 'Layanan kesehatan telinga, hidung, dan tenggorokan',
-                
-                'antrian_hari_ini' => 12,
-                'created_at' => '2024-01-15 08:00:00'
-            ],
-            [
-                'id' => 8,
-                
-                'nama' => 'Poli Kulit',
-                'deskripsi' => 'Layanan kesehatan kulit dan kelamin dengan dokter spesialis dermatologi',
-                
-                'antrian_hari_ini' => 19,
-                'created_at' => '2024-01-15 08:00:00'
-            ]
-        ]);
+        $this->loadCounters();
     }
 
     public function render()
     {
-        $lokets = $this->getDummyLokets()
-            ->when($this->search, function ($collection) {
-                return $collection->filter(function ($loket) {
-                    return stripos($loket['nama'], $this->search) !== false ||
-                           
-                           stripos($loket['deskripsi'], $this->search) !== false;
-                });
-            })
-            ->sortBy($this->sortBy, SORT_REGULAR, $this->sortDirection === 'desc')
-            ->values();
-
-        // Simple pagination simulation
-        $currentPage = request()->get('page', 1);
-        $offset = ($currentPage - 1) * $this->perPage;
-        $paginatedLokets = $lokets->slice($offset, $this->perPage);
-        $total = $lokets->count();
-        $hasPages = $total > $this->perPage;
-
-        return view('livewire.kelola-loket', [
-            'lokets' => $paginatedLokets,
-            'total' => $total,
-            'hasPages' => $hasPages,
-            'currentPage' => $currentPage,
-            'perPage' => $this->perPage
-        ]);
+        return view('livewire.kelola-loket');
     }
 }

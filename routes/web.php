@@ -25,8 +25,24 @@ Route::get('/ambil-antrian', \App\Livewire\AmbilAntrian::class)->name('ambil.ant
 
 // Protected Routes - Require Authentication
 Route::middleware('auth.custom')->group(function () {
+    // Dashboard - Accessible by all authenticated users
     Route::get('/dashboard', \App\Livewire\Dashboard::class)->name('dashboard');
-    Route::get('/kelola-loket', \App\Livewire\KelolaLoket::class)->name('kelola.loket');
-    Route::get('/kelola-user', \App\Livewire\KelolaUser::class)->name('kelola.user');
-    Route::get('/kelola-antrian', \App\Livewire\KelolaAntrian::class)->name('kelola.antrian');
+    
+    // Admin Only Routes
+    Route::middleware('role:admin')->group(function () {
+        // Kelola Loket
+        Route::get('/kelola-loket', \App\Livewire\KelolaLoket::class)->name('kelola.loket');
+        Route::get('/kelola-loket/tambah', \App\Livewire\TambahLoket::class)->name('kelola.loket.tambah');
+        Route::get('/kelola-loket/edit/{id}', \App\Livewire\EditLoket::class)->name('kelola.loket.edit');
+        
+        // Kelola User
+        Route::get('/kelola-user', \App\Livewire\KelolaUser::class)->name('kelola.user');
+        Route::get('/kelola-user/tambah', \App\Livewire\TambahUser::class)->name('kelola.user.tambah');
+        Route::get('/kelola-user/edit/{id}', \App\Livewire\EditUser::class)->name('kelola.user.edit');
+    });
+    
+    // Petugas Only Routes
+    Route::middleware('role:petugas')->group(function () {
+        Route::get('/kelola-antrian', \App\Livewire\KelolaAntrian::class)->name('kelola.antrian');
+    });
 });

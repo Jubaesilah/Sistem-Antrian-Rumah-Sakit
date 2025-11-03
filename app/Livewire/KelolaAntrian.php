@@ -4,211 +4,237 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Livewire\WithPagination;
-use Illuminate\Support\Collection;
-use Illuminate\Pagination\LengthAwarePaginator;
+use App\Helpers\AuthHelper;
+use Illuminate\Support\Facades\Log;
 
 class KelolaAntrian extends Component
 {
-    use WithPagination;
-
-    public $loketId = 1;
-    public $loket;
+    public $counterId;
+    public $counterName = '';
     public $search = '';
-    public $antrianDipanggil = null;
-    public $lokets = [];
-    public $antrians = [];
+    public $sortBy = 'queue_number';
+    public $sortDirection = 'asc';
     public $perPage = 10;
-    public $currentPage = 1;
+    public $pollingInterval = 5; // Auto-refresh every 5 seconds
+    public $isLoading = false;
+    public $lastUpdate;
     
-    protected $listeners = ['refreshAntrian' => '$refresh'];
-    protected $paginationTheme = 'tailwind';
+    // API Data
+    public $currentlyCalled = null;
+    public $queues = [];
+    public $pagination = [];
+    public $apiError = null;
+    
+    protected $listeners = ['refreshAntrian' => 'loadQueues'];
 
     public function mount()
     {
-        // Data dummy loket
-        $this->lokets = [
-            [
-                'id' => 1,
-                'kode' => 'A',
-                'nama' => 'Poli Anak',
-                'deskripsi' => 'Layanan kesehatan untuk anak-anak dan konsultasi tumbuh kembang',
-                'status' => 'aktif'
-            ],
-            [
-                'id' => 2,
-                'kode' => 'B',
-                'nama' => 'Poli Gigi',
-                'deskripsi' => 'Loket pendaftaran layanan kesehatan gigi dan mulut',
-                'status' => 'aktif'
-            ],
-            [
-                'id' => 3,
-                'kode' => 'C',
-                'nama' => 'Poli Umum',
-                'deskripsi' => 'Layanan pemeriksaan kesehatan umum dan konsultasi dokter',
-                'status' => 'aktif'
-            ]
-        ];
+        // Set polling interval dari config atau default 5 detik
+        $this->pollingInterval = config('api.polling_interval', 5);
         
-        // Set loket default
-        $this->loket = collect($this->lokets)->firstWhere('id', $this->loketId);
+        // Get counter_id from logged in user
+        $user = AuthHelper::getUser();
+        $this->counterId = $user['counter_id'] ?? null;
         
-        // Data dummy antrian
-        $this->generateDummyAntrian();
+        if (!$this->counterId) {
+            $this->apiError = 'User tidak memiliki counter yang ditugaskan';
+            return;
+        }
+        
+        $this->loadCounter();
+        $this->loadQueues();
     }
-
-    private function generateDummyAntrian()
+    
+    public function loadCounter()
     {
-        $this->antrians = [];
+        if (!$this->counterId) {
+            return;
+        }
         
-        // Generate antrian untuk setiap loket
-        foreach ($this->lokets as $loket) {
-            $kode = $loket['kode'];
+        try {
+            $response = AuthHelper::apiRequest('GET', '/api/counters/' . $this->counterId);
             
-            // Antrian menunggu
-            for ($i = 1; $i <= 15; $i++) {
-                $this->antrians[] = [
-                    'id' => $kode . $i,
-                    'nomor_antrian' => $kode . str_pad($i, 3, '0', STR_PAD_LEFT),
-                    'loket_id' => $loket['id'],
-                    'status' => 'menunggu',
-                    'nama_pasien' => $this->generateRandomName(),
-                    'jenis_layanan' => $this->getRandomLayanan($loket['nama']),
-                    'created_at' => now()->subMinutes(rand(5, 120)),
-                    'waktu_panggil' => null,
-                    'waktu_selesai' => null
-                ];
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['success']) {
+                    $this->counterName = $data['data']['counter_name'] ?? '';
+                } else {
+                    Log::warning('Failed to load counter: ' . ($data['message'] ?? 'Unknown error'));
+                }
+            } else {
+                Log::error('Failed to fetch counter', ['response' => $response->body()]);
             }
-            
-            // Antrian dipanggil (1 per loket)
-            if ($loket['id'] == $this->loketId) {
-                $this->antrianDipanggil = [
-                    'id' => $kode . '100',
-                    'nomor_antrian' => $kode . '100',
-                    'loket_id' => $loket['id'],
-                    'status' => 'dipanggil',
-                    'nama_pasien' => $this->generateRandomName(),
-                    'jenis_layanan' => $this->getRandomLayanan($loket['nama']),
-                    'created_at' => now()->subMinutes(30),
-                    'waktu_panggil' => now()->subMinutes(5),
-                    'waktu_selesai' => null
-                ];
-            }
+        } catch (\Exception $e) {
+            Log::error('Exception in loadCounter: ' . $e->getMessage());
         }
     }
-    
-    private function generateRandomName()
+
+    public function loadQueues()
     {
-        $firstNames = ['Ahmad', 'Budi', 'Cindy', 'Dewi', 'Eko', 'Fitri', 'Gunawan', 'Hana', 'Irfan', 'Joko', 'Kartika', 'Lina'];
-        $lastNames = ['Saputra', 'Wijaya', 'Susanto', 'Hartono', 'Pratama', 'Sari', 'Putra', 'Santoso', 'Wati', 'Hidayat'];
+        if (!$this->counterId) {
+            return;
+        }
         
-        return $firstNames[array_rand($firstNames)] . ' ' . $lastNames[array_rand($lastNames)];
-    }
-    
-    private function getRandomLayanan($poliName)
-    {
-        $layanan = [
-            'Poli Anak' => ['Imunisasi', 'Konsultasi Tumbuh Kembang', 'Pemeriksaan Rutin', 'Konsultasi Gizi Anak'],
-            'Poli Gigi' => ['Pembersihan Karang Gigi', 'Tambal Gigi', 'Cabut Gigi', 'Konsultasi Gigi'],
-            'Poli Umum' => ['Pemeriksaan Umum', 'Medical Check-up', 'Konsultasi Kesehatan', 'Pemeriksaan Tekanan Darah']
-        ];
+        $this->isLoading = true;
         
-        $availableLayanan = $layanan[$poliName] ?? ['Pemeriksaan Umum'];
-        return $availableLayanan[array_rand($availableLayanan)];
+        try {
+            $response = AuthHelper::apiRequest('GET', '/api/queues', [
+                'counter_id' => $this->counterId,
+                'per_page' => $this->perPage,
+                'page' => $this->pagination['current_page'] ?? 1,
+                'search' => $this->search,
+                'sort_by' => $this->sortBy,
+                'sort_order' => $this->sortDirection
+            ]);
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['success']) {
+                    $this->currentlyCalled = $data['data']['currently_called'];
+                    $this->queues = $data['data']['queues'];
+                    $this->pagination = $data['data']['pagination'];
+                    $this->apiError = null;
+                } else {
+                    $this->apiError = $data['message'] ?? 'Gagal memuat data antrian';
+                }
+            } else {
+                $this->apiError = 'Gagal terhubung ke server';
+                Log::error('Failed to load queues', ['response' => $response->body()]);
+            }
+        } catch (\Exception $e) {
+            $this->apiError = 'Terjadi kesalahan: ' . $e->getMessage();
+            Log::error('Exception in loadQueues: ' . $e->getMessage());
+        }
+        
+        $this->lastUpdate = now()->format('H:i:s');
+        $this->isLoading = false;
     }
 
     public function updatingSearch()
     {
-        $this->resetPage();
-    }
-
-    public function panggilAntrian($antrianId)
-    {
-        // Cari antrian berdasarkan ID
-        $index = collect($this->antrians)->search(function($antrian) use ($antrianId) {
-            return $antrian['id'] == $antrianId;
-        });
-        
-        if ($index !== false) {
-            // Simpan antrian yang akan dipanggil
-            $antrian = $this->antrians[$index];
-            
-            // Update status antrian menjadi dipanggil
-            $antrian['status'] = 'dipanggil';
-            $antrian['waktu_panggil'] = now();
-            
-            // Hapus dari array antrian
-            unset($this->antrians[$index]);
-            
-            // Set sebagai antrian yang sedang dipanggil
-            $this->antrianDipanggil = $antrian;
-            
-            // Dispatch event untuk notifikasi suara
-            $this->dispatch('antrianDipanggil', [
-                'nomor' => $antrian['nomor_antrian'],
-                'loket' => $this->loket['nama']
-            ]);
-        }
-    }
-
-    public function selesaikanAntrian()
-    {
-        if ($this->antrianDipanggil) {
-            // Update status antrian menjadi selesai
-            $this->antrianDipanggil['status'] = 'selesai';
-            $this->antrianDipanggil['waktu_selesai'] = now();
-            
-            // Hapus dari antrian yang sedang dipanggil
-            $this->antrianDipanggil = null;
-        }
-    }
-
-    public function pilihLoket($loketId)
-    {
-        $this->loketId = $loketId;
-        $this->loket = collect($this->lokets)->firstWhere('id', (int)$loketId);
-        $this->resetPage();
-        
-        // Reset antrian yang sedang dipanggil
-        $this->antrianDipanggil = null;
-        
-        // Generate ulang data dummy untuk loket baru
-        $this->generateDummyAntrian();
+        $this->loadQueues();
     }
     
-    private function getAntrianMenunggu()
+    public function updatedPerPage()
     {
-        // Filter antrian menunggu untuk loket yang dipilih
-        $filtered = collect($this->antrians)->filter(function($antrian) {
-            return $antrian['status'] === 'menunggu' && 
-                  $antrian['loket_id'] === $this->loketId &&
-                  (empty($this->search) || 
-                   stripos($antrian['nomor_antrian'], $this->search) !== false ||
-                   stripos($antrian['nama_pasien'], $this->search) !== false);
-        })->sortBy('created_at')->values();
+        $this->loadQueues();
+    }
+    
+    public function sortByField($field)
+    {
+        if ($this->sortBy === $field) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $field;
+            $this->sortDirection = 'asc';
+        }
         
-        // Buat paginator manual
-        $page = $this->currentPage;
-        $perPage = $this->perPage;
-        $items = $filtered->slice(($page - 1) * $perPage, $perPage)->values();
-        
-        return new LengthAwarePaginator(
-            $items,
-            $filtered->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
+        $this->loadQueues();
+    }
+    
+    public function gotoPage($page)
+    {
+        $this->pagination['current_page'] = $page;
+        $this->loadQueues();
+    }
+
+    public function callQueue($queueId)
+    {
+        try {
+            $response = AuthHelper::apiRequest('PATCH', '/api/queues/' . $queueId, [
+                'status' => 'called'
+            ]);
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['success']) {
+                    $this->loadQueues();
+                    
+                    // Dispatch event untuk notifikasi suara
+                    $queue = $data['data'];
+                    $this->dispatch('queue-called', [
+                        'queue_number' => $queue['queue_number'],
+                        'counter_name' => $queue['counter']['counter_name'] ?? ''
+                    ]);
+                    
+                    $this->dispatch('queue-call-success', [
+                        'message' => 'Antrian berhasil dipanggil'
+                    ]);
+                } else {
+                    $this->dispatch('queue-call-failed', [
+                        'message' => $data['message'] ?? 'Gagal memanggil antrian'
+                    ]);
+                }
+            } else {
+                $this->dispatch('queue-call-failed', [
+                    'message' => 'Gagal terhubung ke server'
+                ]);
+            }
+        } catch (\Exception $e) {
+            $this->dispatch('queue-call-failed', [
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ]);
+            Log::error('Exception in callQueue: ' . $e->getMessage());
+        }
+    }
+
+    public function completeQueue($queueId)
+    {
+        try {
+            $response = AuthHelper::apiRequest('PATCH', '/api/queues/' . $queueId, [
+                'status' => 'done'
+            ]);
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['success']) {
+                    $this->loadQueues();
+                    $this->dispatch('queue-complete-success', [
+                        'message' => 'Antrian berhasil diselesaikan'
+                    ]);
+                } else {
+                    $this->dispatch('queue-complete-failed', [
+                        'message' => $data['message'] ?? 'Gagal menyelesaikan antrian'
+                    ]);
+                }
+            } else {
+                $this->dispatch('queue-complete-failed', [
+                    'message' => 'Gagal terhubung ke server'
+                ]);
+            }
+        } catch (\Exception $e) {
+            $this->dispatch('queue-complete-failed', [
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ]);
+            Log::error('Exception in completeQueue: ' . $e->getMessage());
+        }
+    }
+
+
+    /**
+     * Method untuk di-trigger oleh wire:poll
+     * Akan dipanggil otomatis setiap X detik
+     */
+    public function refreshQueue()
+    {
+        $this->loadQueues();
+    }
+    
+    /**
+     * Method untuk manual refresh (jika diperlukan)
+     */
+    public function manualRefresh()
+    {
+        $this->loadQueues();
+        $this->dispatch('queue-refreshed');
     }
 
     public function render()
     {
-        $antrianMenunggu = $this->getAntrianMenunggu();
-        
-        return view('livewire.kelola-antrian', [
-            'antrianDipanggil' => $this->antrianDipanggil,
-            'antrianMenunggu' => $antrianMenunggu,
-            'lokets' => $this->lokets
-        ]);
+        return view('livewire.kelola-antrian');
     }
 }

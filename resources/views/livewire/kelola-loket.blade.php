@@ -1,5 +1,18 @@
 <x-layouts.sidebar title="Kelola Loket - Rumah Sakit Sehat Selalu">
     <div class="flex-grow flex flex-col">
+        <!-- Loading Overlay -->
+        <div wire:loading wire:target="delete" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-white rounded-lg p-6 shadow-xl">
+                <div class="flex items-center space-x-3">
+                    <svg class="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-gray-700 font-medium">Menghapus counter...</span>
+                </div>
+            </div>
+        </div>
+
         <div class="flex-grow px-4 sm:px-6 lg:px-8 py-8 w-full">
             <!-- Page Header -->
             <div class="mb-8">
@@ -7,7 +20,7 @@
                 <p class="mt-2 text-sm text-gray-600">Kelola semua loket pelayanan rumah sakit</p>
             </div>
 
-            <!-- Flash Message -->
+            <!-- Flash Messages -->
             @if (session()->has('message'))
                 <div class="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md" role="alert">
                     <div class="flex">
@@ -18,6 +31,36 @@
                         </div>
                         <div class="ml-3">
                             <p class="text-sm">{{ session('message') }}</p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+            
+            @if (session()->has('error'))
+                <div class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md" role="alert">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm">{{ session('error') }}</p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+            
+            @if ($apiError)
+                <div class="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-md" role="alert">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm">{{ $apiError }}</p>
                         </div>
                     </div>
                 </div>
@@ -44,10 +87,16 @@
                     <!-- Sort By -->
                     <div class="relative">
                         <select wire:model.live="sortBy" class="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                            <option value="nama">Urutkan: Nama</option>
-                            <option value="kode">Urutkan: Kode</option>
-                            <option value="status">Urutkan: Status</option>
-                            <option value="antrian_hari_ini">Urutkan: Antrian</option>
+                            <option value="counter_name">Urutkan: Nama</option>
+                            <option value="created_at">Urutkan: Tanggal Dibuat</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Sort Direction -->
+                    <div class="relative">
+                        <select wire:model.live="sortDirection" class="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="asc">A-Z / Lama-Baru</option>
+                            <option value="desc">Z-A / Baru-Lama</option>
                         </select>
                     </div>
 
@@ -63,14 +112,14 @@
                 </div>
 
                 <!-- Add Button -->
-                <button 
-                    wire:click="openCreateModal"
+                <a 
+                    href="{{ route('kelola.loket.tambah') }}"
                     class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <svg class="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Tambah Loket
-                </button>
+                    Tambah Counter
+                </a>
             </div>
 
             <!-- Table -->
@@ -79,11 +128,10 @@
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                               
-                                <th wire:click="sortBy('nama')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                <th wire:click="sortByField('counter_name')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                                     <div class="flex items-center space-x-1">
-                                        <span>Nama Loket</span>
-                                        @if($sortBy === 'nama')
+                                        <span>Nama Counter</span>
+                                        @if($sortBy === 'counter_name')
                                             <svg class="w-4 h-4 {{ $sortDirection === 'asc' ? 'transform rotate-180' : '' }}" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                                             </svg>
@@ -93,11 +141,10 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Deskripsi
                                 </th>
-                               
-                                <th wire:click="sortBy('antrian_hari_ini')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                <th wire:click="sortByField('created_at')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                                     <div class="flex items-center space-x-1">
-                                        <span>Antrian Hari Ini</span>
-                                        @if($sortBy === 'antrian_hari_ini')
+                                        <span>Tanggal Dibuat</span>
+                                        @if($sortBy === 'created_at')
                                             <svg class="w-4 h-4 {{ $sortDirection === 'asc' ? 'transform rotate-180' : '' }}" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                                             </svg>
@@ -110,24 +157,18 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($lokets as $loket)
+                            @forelse($counters as $counter)
                                 <tr class="hover:bg-gray-50">
-                                    
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900">{{ $loket['nama'] }}</div>
+                                        <div class="text-sm font-medium text-gray-900">{{ $counter['counter_name'] }}</div>
                                     </td>
                                     <td class="px-6 py-4">
-                                        <div class="text-sm text-gray-900 max-w-xs truncate" title="{{ $loket['deskripsi'] }}">
-                                            {{ $loket['deskripsi'] }}
+                                        <div class="text-sm text-gray-900 max-w-xs truncate" title="{{ $counter['description'] ?? '-' }}">
+                                            {{ $counter['description'] ?? '-' }}
                                         </div>
                                     </td>
-
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        <div class="flex items-center">
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {{ $loket['antrian_hari_ini'] }} orang
-                                            </span>
-                                        </div>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ \Carbon\Carbon::parse($counter['created_at'])->format('d M Y H:i') }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div class="relative" x-data="{ open: false }">
@@ -138,13 +179,17 @@
                                             </button>
                                             <div x-show="open" @click.away="open = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                                                 <div class="py-1" role="menu">
-                                                    <button wire:click="openEditModal({{ $loket['id'] }})" @click="open = false" class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
+                                                    <a href="{{ route('kelola.loket.edit', $counter['counter_id']) }}" class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900" role="menuitem">
                                                         <svg class="mr-3 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                         </svg>
                                                         Edit
-                                                    </button>
-                                                    <button wire:click="delete({{ $loket['id'] }})" @click="open = false" onclick="return confirm('Apakah Anda yakin ingin menghapus loket ini?')" class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 hover:text-red-900" role="menuitem">
+                                                    </a>
+                                                    <button 
+                                                        onclick="confirmDelete('{{ $counter['counter_id'] }}', '{{ $counter['counter_name'] }}')"
+                                                        @click="open = false"
+                                                        class="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 hover:text-red-900" 
+                                                        role="menuitem">
                                                         <svg class="mr-3 h-4 w-4 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
@@ -157,13 +202,13 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">
+                                    <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">
                                         <div class="flex flex-col items-center">
                                             <svg class="h-12 w-12 text-gray-300 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                             </svg>
-                                            <p>Tidak ada data loket ditemukan</p>
-                                            <p class="text-xs text-gray-400 mt-1">Coba ubah kata kunci pencarian atau tambah loket baru</p>
+                                            <p>Tidak ada data counter ditemukan</p>
+                                            <p class="text-xs text-gray-400 mt-1">Coba ubah kata kunci pencarian atau tambah counter baru</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -173,26 +218,27 @@
                 </div>
 
                 <!-- Pagination -->
-                @if($hasPages)
+                @if(!empty($pagination) && $pagination['total'] > $pagination['per_page'])
                     <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
                         <div class="flex items-center justify-between">
                             <!-- Left side - Results info -->
                             <div class="flex-1 flex justify-between sm:hidden">
                                 <span class="text-sm text-gray-700">
-                                    Showing {{ ($currentPage - 1) * $perPage + 1 }} to {{ min($currentPage * $perPage, $total) }} of {{ $total }} results
+                                    Showing {{ $pagination['from'] ?? 0 }} to {{ $pagination['to'] ?? 0 }} of {{ $pagination['total'] ?? 0 }} results
                                 </span>
                             </div>
                             <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                                 <div>
                                     <p class="text-sm text-gray-700">
-                                        Showing <span class="font-medium">{{ ($currentPage - 1) * $perPage + 1 }}</span> to <span class="font-medium">{{ min($currentPage * $perPage, $total) }}</span> of <span class="font-medium">{{ $total }}</span> results
+                                        Showing <span class="font-medium">{{ $pagination['from'] ?? 0 }}</span> to <span class="font-medium">{{ $pagination['to'] ?? 0 }}</span> of <span class="font-medium">{{ $pagination['total'] ?? 0 }}</span> results
                                     </p>
                                 </div>
                                 
                                 <!-- Right side - Pagination navigation -->
                                 <div>
                                     @php
-                                        $totalPages = ceil($total / $perPage);
+                                        $currentPage = $pagination['current_page'] ?? 1;
+                                        $lastPage = $pagination['last_page'] ?? 1;
                                     @endphp
                                     
                                     <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
@@ -214,7 +260,7 @@
                                         @endif
 
                                         <!-- Page Numbers -->
-                                        @for($page = 1; $page <= min($totalPages, 10); $page++)
+                                        @for($page = 1; $page <= min($lastPage, 10); $page++)
                                             @if($page == $currentPage)
                                                 <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-indigo-600 text-sm font-medium text-white">{{ $page }}</span>
                                             @else
@@ -223,10 +269,10 @@
                                         @endfor
 
                                         <!-- Show ellipsis and last pages if there are more than 10 pages -->
-                                        @if($totalPages > 10)
+                                        @if($lastPage > 10)
                                             <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">...</span>
                                             
-                                            @for($page = max(11, $totalPages - 2); $page <= $totalPages; $page++)
+                                            @for($page = max(11, $lastPage - 2); $page <= $lastPage; $page++)
                                                 @if($page == $currentPage)
                                                     <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-indigo-600 text-sm font-medium text-white">{{ $page }}</span>
                                                 @else
@@ -236,7 +282,7 @@
                                         @endif
 
                                         <!-- Next Page Link -->
-                                        @if($currentPage < $totalPages)
+                                        @if($currentPage < $lastPage)
                                             <a href="?page={{ $currentPage + 1 }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                                 <span class="sr-only">Next</span>
                                                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -270,72 +316,75 @@
         </div>
     </div>
 
-    <!-- Modal -->
-    @if($showModal)
-        <div class="fixed inset-0 z-50 overflow-y-auto" x-data="{ show: @entangle('showModal') }" x-show="show">
-            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" x-show="show" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
-
-                <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-
-                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" x-show="show" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
-                    <form wire:submit.prevent="save">
-                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                            <div class="sm:flex sm:items-start">
-                                <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                                        {{ $modalMode === 'create' ? 'Tambah Loket Baru' : 'Edit Loket' }}
-                                    </h3>
-                                    
-                                    <div class="space-y-4">
-                                        <!-- Kode -->
-                                        <div>
-                                            <label for="kode" class="block text-sm font-medium text-gray-700">Kode Loket</label>
-                                            <input wire:model="kode" type="text" id="kode" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="A, B, C, dst...">
-                                            @error('kode') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                                        </div>
-
-                                        <!-- Nama -->
-                                        <div>
-                                            <label for="nama" class="block text-sm font-medium text-gray-700">Nama Loket</label>
-                                            <input wire:model="nama" type="text" id="nama" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Poli Anak, Poli Gigi, dst...">
-                                            @error('nama') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                                        </div>
-
-                                        <!-- Deskripsi -->
-                                        <div>
-                                            <label for="deskripsi" class="block text-sm font-medium text-gray-700">Deskripsi</label>
-                                            <textarea wire:model="deskripsi" id="deskripsi" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Deskripsi layanan loket..."></textarea>
-                                            @error('deskripsi') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                                        </div>
-
-                                        <!-- Status -->
-                                        <div>
-                                            <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                                            <select wire:model="status" id="status" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                                                <option value="aktif">Aktif</option>
-                                                <option value="nonaktif">Nonaktif</option>
-                                            </select>
-                                            @error('status') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                            <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
-                                {{ $modalMode === 'create' ? 'Tambah' : 'Simpan' }}
-                            </button>
-                            <button wire:click="closeModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                                Batal
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    @endif
-
-    <!-- Alpine.js -->
+    <!-- Alpine.js for dropdown menus -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- SweetAlert2 & Livewire Scripts -->
+    <script>
+        // SweetAlert2 Delete Confirmation
+        function confirmDelete(counterId, counterName) {
+            Swal.fire({
+                title: 'Hapus Counter?',
+                html: `Apakah Anda yakin ingin menghapus counter <strong>${counterName}</strong>?<br><small class="text-gray-500">Tindakan ini tidak dapat dibatalkan.</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: '<i class="fas fa-trash mr-2"></i> Ya, Hapus!',
+                cancelButtonText: '<i class="fas fa-times mr-2"></i> Batal',
+                reverseButtons: true,
+                focusCancel: true,
+                customClass: {
+                    confirmButton: 'px-5 py-2.5 text-sm font-medium',
+                    cancelButton: 'px-5 py-2.5 text-sm font-medium'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show loading
+                    Swal.fire({
+                        title: 'Menghapus...',
+                        html: 'Mohon tunggu sebentar',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Call Livewire delete method
+                    @this.call('delete', counterId);
+                }
+            });
+        }
+        
+        // Livewire event listeners
+        document.addEventListener('livewire:init', () => {
+            // Success event
+            Livewire.on('counter-deleted', () => {
+                // Close loading and show success
+                Swal.fire({
+                    title: 'Berhasil!',
+                    text: 'Counter berhasil dihapus',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                // Scroll to top to show flash message
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+            
+            // Error event
+            Livewire.on('counter-delete-failed', (event) => {
+                // Close loading and show error
+                Swal.fire({
+                    title: 'Gagal!',
+                    text: event.message || 'Terjadi kesalahan saat menghapus counter',
+                    icon: 'error',
+                    confirmButtonColor: '#dc2626',
+                    confirmButtonText: 'OK'
+                });
+            });
+        });
+    </script>
 </x-layouts.sidebar>
