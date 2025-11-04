@@ -1,6 +1,5 @@
 <x-layouts.sidebar title="Kelola Antrian - Rumah Sakit Sehat Selalu">
     <div class="flex-grow flex flex-col" 
-         wire:poll.{{ $pollingInterval }}s="refreshQueue"
          wire:loading.class="opacity-95">
         <div class="flex-grow px-4 sm:px-6 lg:px-8 py-8 w-full">
             <!-- Page Header -->

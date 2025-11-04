@@ -15,7 +15,6 @@ class KelolaAntrian extends Component
     public $sortBy = 'queue_number';
     public $sortDirection = 'asc';
     public $perPage = 10;
-    public $pollingInterval = 3; // Auto-refresh every 3 seconds
     public $isLoading = false;
     public $lastUpdate;
 
@@ -29,9 +28,6 @@ class KelolaAntrian extends Component
 
     public function mount()
     {
-        // Set polling interval dari config atau default 5 detik
-        $this->pollingInterval = config('api.polling_interval', 5);
-
         // Get counter_id from logged in user
         $user = AuthHelper::getUser();
         $this->counterId = $user['counter_id'] ?? null;
@@ -216,16 +212,7 @@ class KelolaAntrian extends Component
 
 
     /**
-     * Method untuk di-trigger oleh wire:poll
-     * Akan dipanggil otomatis setiap X detik
-     */
-    public function refreshQueue()
-    {
-        $this->loadQueues();
-    }
-
-    /**
-     * Method untuk manual refresh (jika diperlukan)
+     * Method untuk manual refresh
      */
     public function manualRefresh()
     {
