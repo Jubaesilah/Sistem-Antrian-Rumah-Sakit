@@ -15,48 +15,48 @@ class KelolaAntrian extends Component
     public $sortBy = 'queue_number';
     public $sortDirection = 'asc';
     public $perPage = 10;
-    public $pollingInterval = 5; // Auto-refresh every 5 seconds
+    public $pollingInterval = 3; // Auto-refresh every 3 seconds
     public $isLoading = false;
     public $lastUpdate;
-    
+
     // API Data
     public $currentlyCalled = null;
     public $queues = [];
     public $pagination = [];
     public $apiError = null;
-    
+
     protected $listeners = ['refreshAntrian' => 'loadQueues'];
 
     public function mount()
     {
         // Set polling interval dari config atau default 5 detik
         $this->pollingInterval = config('api.polling_interval', 5);
-        
+
         // Get counter_id from logged in user
         $user = AuthHelper::getUser();
         $this->counterId = $user['counter_id'] ?? null;
-        
+
         if (!$this->counterId) {
             $this->apiError = 'User tidak memiliki counter yang ditugaskan';
             return;
         }
-        
+
         $this->loadCounter();
         $this->loadQueues();
     }
-    
+
     public function loadCounter()
     {
         if (!$this->counterId) {
             return;
         }
-        
+
         try {
             $response = AuthHelper::apiRequest('GET', '/api/counters/' . $this->counterId);
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if ($data['success']) {
                     $this->counterName = $data['data']['counter_name'] ?? '';
                 } else {
@@ -75,9 +75,9 @@ class KelolaAntrian extends Component
         if (!$this->counterId) {
             return;
         }
-        
+
         $this->isLoading = true;
-        
+
         try {
             $response = AuthHelper::apiRequest('GET', '/api/queues', [
                 'counter_id' => $this->counterId,
@@ -87,10 +87,10 @@ class KelolaAntrian extends Component
                 'sort_by' => $this->sortBy,
                 'sort_order' => $this->sortDirection
             ]);
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if ($data['success']) {
                     $this->currentlyCalled = $data['data']['currently_called'];
                     $this->queues = $data['data']['queues'];
@@ -107,7 +107,7 @@ class KelolaAntrian extends Component
             $this->apiError = 'Terjadi kesalahan: ' . $e->getMessage();
             Log::error('Exception in loadQueues: ' . $e->getMessage());
         }
-        
+
         $this->lastUpdate = now()->format('H:i:s');
         $this->isLoading = false;
     }
@@ -116,12 +116,12 @@ class KelolaAntrian extends Component
     {
         $this->loadQueues();
     }
-    
+
     public function updatedPerPage()
     {
         $this->loadQueues();
     }
-    
+
     public function sortByField($field)
     {
         if ($this->sortBy === $field) {
@@ -130,10 +130,10 @@ class KelolaAntrian extends Component
             $this->sortBy = $field;
             $this->sortDirection = 'asc';
         }
-        
+
         $this->loadQueues();
     }
-    
+
     public function gotoPage($page)
     {
         $this->pagination['current_page'] = $page;
@@ -146,20 +146,20 @@ class KelolaAntrian extends Component
             $response = AuthHelper::apiRequest('PATCH', '/api/queues/' . $queueId, [
                 'status' => 'called'
             ]);
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if ($data['success']) {
                     $this->loadQueues();
-                    
+
                     // Dispatch event untuk notifikasi suara
                     $queue = $data['data'];
                     $this->dispatch('queue-called', [
                         'queue_number' => $queue['queue_number'],
                         'counter_name' => $queue['counter']['counter_name'] ?? ''
                     ]);
-                    
+
                     $this->dispatch('queue-call-success', [
                         'message' => 'Antrian berhasil dipanggil'
                     ]);
@@ -187,10 +187,10 @@ class KelolaAntrian extends Component
             $response = AuthHelper::apiRequest('PATCH', '/api/queues/' . $queueId, [
                 'status' => 'done'
             ]);
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if ($data['success']) {
                     $this->loadQueues();
                     $this->dispatch('queue-complete-success', [
@@ -223,7 +223,7 @@ class KelolaAntrian extends Component
     {
         $this->loadQueues();
     }
-    
+
     /**
      * Method untuk manual refresh (jika diperlukan)
      */
